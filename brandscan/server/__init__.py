@@ -93,7 +93,8 @@ def create_app(settings: Settings, start_worker: bool = True):
 
     @app.get("/", include_in_schema=False)
     def index():
-        return FileResponse(STATIC / "index.html")
+        # Revalidate every load so a server update shows up on a normal reload.
+        return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/health")
     def health():
