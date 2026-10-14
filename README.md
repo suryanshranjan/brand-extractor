@@ -1,5 +1,7 @@
 # Brand Extractor
 
+[![tests](https://github.com/suryanshranjan/brand-extractor/actions/workflows/tests.yml/badge.svg)](https://github.com/suryanshranjan/brand-extractor/actions/workflows/tests.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Find the brands that sponsor or partner with an Instagram account: college fests, events, clubs, creators.
 Give it an account; it reads the recent posts (captions, tags, collab and paid-partnership labels, and the
 text on posters), looks up every account it finds, and returns a ranked list of **brands**, kept separate
