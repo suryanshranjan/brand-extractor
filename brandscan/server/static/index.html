@@ -87,6 +87,7 @@ dialog::backdrop { background: rgba(9, 9, 11, .45); }
 .field input { flex: 1; }
 .field .at + input { padding-left: 3px; }
 .field select { padding-right: 8px; cursor: pointer; }
+.field select option { background: var(--bg); color: var(--ink); }
 .btn { height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); cursor: pointer;
   display: inline-flex; align-items: center; gap: 8px; font-weight: 500; text-decoration: none; white-space: nowrap; transition: background .15s; }
 .btn:hover { background: var(--hover); }
@@ -94,6 +95,8 @@ dialog::backdrop { background: rgba(9, 9, 11, .45); }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .btn.primary:hover:not(:disabled) { opacity: .88; background: var(--ink); }
 .btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn.icon { width: 32px; padding: 0; justify-content: center; }
+.btn.danger:hover:not(:disabled) { color: var(--red); border-color: var(--red-line); background: var(--red-bg); }
 .btn svg { width: 15px; height: 15px; flex: none; }
 .opts { display: flex; gap: 20px; margin-top: 10px; font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
 .opts label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
@@ -108,9 +111,8 @@ dialog::backdrop { background: rgba(9, 9, 11, .45); }
 .pane-head { position: sticky; top: 0; background: var(--bg); padding: 14px 20px 10px; font-size: 13px; font-weight: 500; color: var(--muted);
   display: flex; justify-content: space-between; border-bottom: 1px solid var(--line-2); z-index: 1; }
 .jobs { list-style: none; margin: 0; padding: 6px 8px; }
-.jobs li[data-id] { padding: 10px 12px; border-radius: 8px; cursor: pointer; display: grid; gap: 2px; }
-.jobs li[data-id]:hover { background: var(--hover); }
-.jobs li.active { background: var(--hover); }
+.jobs a.job { padding: 10px 12px; border-radius: 8px; display: grid; gap: 2px; color: inherit; text-decoration: none; }
+.jobs a.job:hover, .jobs a.job.active { background: var(--hover); }
 .jobs .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .jobs .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jobs .when { color: var(--faint); font-size: 12px; flex: none; }
@@ -276,6 +278,9 @@ const ICON = {
   dl: '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.5v8m0 0 3-3m-3 3-3-3M3 13.5h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   search: '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="m10.5 10.5 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
   check: '<svg viewBox="0 0 16 16" fill="none"><path d="M8 1.5 9.8 3l2.3-.2.6 2.2 2 1.2-1 2.1.6 2.2-2.1 1-.8 2.2-2.3-.4L8 14.5 6.2 13l-2.3.4-.8-2.2-2.1-1 .6-2.2-1-2.1 2-1.2.6-2.2L5.6 3 7.4 1.5Z" fill="currentColor" opacity=".25"/><path d="m5.5 8.2 1.7 1.6 3.3-3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  retry: '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1M13.5 2v3h-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 9h6.6l.7-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  open: '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   scan: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/><circle cx="17" cy="7" r="1" fill="currentColor"/></svg>',
 };
 const FILE_LABELS = {"brands.csv": "Brands CSV", "all_entities.csv": "All results CSV", "report.json": "JSON"};
@@ -323,17 +328,36 @@ function renderJobs(jobs) {
     const pr = progressOf(j);
     const sub = pr ? pr.text : (j.summary && j.summary.brands !== undefined
       ? `${fmt(j.summary.brands)} brands · ${fmt(j.summary.posts_scanned)} posts` : (j.message || ""));
-    return `<li data-id="${esc(j.id)}" class="${j.id === selected ? "active" : ""}" title="${esc(new Date(j.created_at * 1000).toLocaleString())}">
+    return `<li><a class="job${j.id === selected ? " active" : ""}" href="#/scans/${esc(j.id)}" title="${esc(new Date(j.created_at * 1000).toLocaleString())}">
       <div class="top"><span class="t">@${esc(j.target)}</span><span class="when">${esc(ago(j.created_at))}</span></div>
       <div class="s">${state(j.status)}<span>${pr || j.status === "done" || j.status === "partial" ? "· " + esc(sub) : ""}</span></div>
       ${pr ? bar(pr) : ""}
-    </li>`;
+    </a></li>`;
   }).join("");
-  ul.querySelectorAll("li[data-id]").forEach((li) => li.onclick = () => {
-    if (selected === li.dataset.id) return;
-    select(li.dataset.id); skeleton(); refresh();
-    if (window.matchMedia("(max-width: 860px)").matches) $("detail").scrollIntoView({behavior: "smooth"});
-  });
+}
+
+// List items are plain links, so Ctrl/middle-click and "Open in new tab" work; a normal click lands here.
+window.addEventListener("hashchange", () => {
+  const id = (location.hash.match(/^#\/scans\/(\w+)/) || [])[1] || null;
+  if (id === selected) return;
+  selected = id; showAll = false; query = "";
+  skeleton(); refresh();
+  if (id && window.matchMedia("(max-width: 860px)").matches) $("detail").scrollIntoView({behavior: "smooth"});
+});
+
+const RETRY_LABEL = {failed: "Retry", cancelled: "Retry", partial: "Resume", done: "Run again"};
+
+async function retryScan(job, btn) {
+  btn.disabled = true;
+  try { await api(`/api/scans/${job.id}/retry`, {method: "POST", body: JSON.stringify({fresh: false})}); lastSig = ""; refresh(); }
+  catch (e) { btn.disabled = false; alert(e.message); }
+}
+
+async function deleteScan(job, btn) {
+  if (!confirm(`Delete the scan of @${job.target}? Its downloaded files stay on the server.`)) return;
+  btn.disabled = true;
+  try { await api(`/api/scans/${job.id}`, {method: "DELETE"}); select(null); skeleton(); refresh(); }
+  catch (e) { btn.disabled = false; alert(e.message); }
 }
 
 function fileLink(job, name) {
@@ -482,12 +506,16 @@ function renderDetail(job) {
         <h1><a href="https://www.instagram.com/${esc(job.target)}/" target="_blank" rel="noopener noreferrer">@${esc(job.target)}</a></h1>
         <div class="meta">${state(job.status)}${s.full_name ? `<span>${esc(s.full_name)}</span>` : ""}<span>${esc(started)}</span></div>
       </div>
-      <div class="actions">${active ? '<button class="btn sm" id="cancelBtn">Cancel scan</button>' : (job.files || []).map((f) => fileLink(job, f)).join("")}</div>
+      <div class="actions">${active ? '<button class="btn sm" id="cancelBtn">Cancel scan</button>'
+        : `<button class="btn sm${job.status === "failed" ? " primary" : ""}" id="retryBtn" type="button">${ICON.retry}${RETRY_LABEL[job.status] || "Retry"}</button>`
+          + (job.files || []).map((f) => fileLink(job, f)).join("")
+          + `<button class="btn sm icon danger" id="deleteBtn" type="button" title="Delete scan" aria-label="Delete scan">${ICON.trash}</button>`}
+        <a class="btn sm icon" href="#/scans/${esc(job.id)}" target="_blank" rel="noopener" title="Open in new tab" aria-label="Open in new tab">${ICON.open}</a></div>
     </div>
     ${pr ? `<div class="progress-block"><div class="row"><span>${esc(pr.text)}</span><span class="num muted">${Math.round(pr.pct)}%</span></div>${bar(pr)}
       <p>Results appear here when the scan finishes. You can close this page; the scan keeps running.</p></div>` : ""}
     ${job.message && !active ? (job.status === "failed"
-      ? `<div class="alert"><b>Scan failed</b><span>${esc(job.message)}</span>${/log ?in|session/i.test(job.message) && ig && ig.source === "web" && ig.manageable
+      ? `<div class="alert"><b>Scan failed</b><span>${esc(job.message)}</span>${/log ?in|session|connect/i.test(job.message) && ig && ig.source === "web" && ig.manageable
           ? `<div><button class="btn sm primary" type="button" data-connect>${ig.connected ? "Reconnect Instagram" : "Connect Instagram"}</button></div>` : ""}</div>`
       : `<div class="note">${esc(job.message)}</div>`) : ""}
     ${s.brands !== undefined ? `<dl class="figures">
@@ -504,6 +532,8 @@ function renderDetail(job) {
       <tbody id="rows">${rowsHtml(job)}</tbody></table></div>` : ""}
   </div>`;
   const c = $("cancelBtn"); if (c) c.onclick = async () => { c.disabled = true; await api(`/api/scans/${job.id}/cancel`, {method: "POST"}); refresh(); };
+  const r = $("retryBtn"); if (r) r.onclick = () => retryScan(job, r);
+  const del = $("deleteBtn"); if (del) del.onclick = () => deleteScan(job, del);
   d.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
     const v = b.dataset.all === "1"; if (v === showAll) return; showAll = v; refresh();
   });
@@ -518,9 +548,11 @@ async function refresh() {
     if (!selected && jobs.length) select(jobs[0].id);
     renderJobs(jobs);
     renderDetail(selected ? await api(`/api/scans/${selected}${showAll ? "?entities=true" : ""}`) : null);
-    if (jobs.some((j) => j.status === "queued" || j.status === "running")) timer = setTimeout(refresh, 2000);
+    // Poll fast while something runs; slowly otherwise, so scans started in another tab show up.
+    timer = setTimeout(refresh, jobs.some((j) => j.status === "queued" || j.status === "running") ? 2000 : 15000);
   } catch (e) { $("health").textContent = e.message; }
 }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 
 $("scanForm").onsubmit = async (ev) => {
   ev.preventDefault();

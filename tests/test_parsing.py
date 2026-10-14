@@ -2,7 +2,8 @@ import json
 
 from brandscan.auth import import_cookies, load_cookies, parse_cookie_data
 from brandscan.graph import parse_graph_media
-from brandscan.instagram import InstagramClient, parse_feed_item, parse_graphql_node
+from brandscan.instagram import (InstagramClient, parse_feed_item, parse_graphql_node, parse_profile,
+                                 parse_profile_page)
 from brandscan.models import Profile
 
 FEED_ITEM = {
@@ -85,6 +86,28 @@ def test_iter_posts_anonymous_uses_profile_edges():
     client = InstagramClient(None, delay=(0, 0))
     raw = {"edge_owner_to_timeline_media": {"edges": [{"node": GRAPHQL_NODE}]}}
     assert [p.code for p in client.iter_posts(Profile("t"), raw)] == ["XYZ789"]
+
+
+PROFILE_PAGE = (
+    '<html><script type="application/json">{"require":[["x",{"__bbox":{"result":{"data":{"xig_user_by_username":'
+    '{"pk":"13460080","id":"1784","username":"engifest_dtu","full_name":"Engifest DTU","is_private":false,'
+    '"follower_count":37079,"bio_links":[{"url":"https://engifest.in"}]}}}}}]]}</script>'
+    '<script type="application/json">{"require":[["y",{"__bbox":{"result":{"data":{"xig_user_by_username":'
+    '{"username":null,"polaris_ordered_timeline_connection":{"edges":[{"node":{"pk":"9","code":"DQx1",'
+    '"caption":{"text":"Powered by @redbullindia #ad"},"display_uri":"img",'
+    '"accessibility_caption":"May be an image of text"}}]}}}}}}]]}</script></html>'
+)
+
+
+def test_profile_page_fallback_parses_profile_and_posts():
+    user = parse_profile_page(PROFILE_PAGE)
+    profile = parse_profile(user)
+    assert (profile.username, profile.user_id, profile.followers) == ("engifest_dtu", "13460080", 37079)
+    assert profile.external_url == "https://engifest.in" and not profile.is_private
+    posts = list(InstagramClient(None, delay=(0, 0)).iter_posts(profile, user))
+    assert [(p.code, p.caption, p.media[0].image_url, p.media[0].alt_text) for p in posts] == [
+        ("DQx1", "Powered by @redbullindia #ad", "img", "May be an image of text")]
+    assert parse_profile_page("<html>Page not found</html>") is None
 
 
 def test_hourly_cap_counts_calls():

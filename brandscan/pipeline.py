@@ -11,7 +11,7 @@ from typing import Callable
 from . import classify as C
 from .config import Settings
 from .graph import GraphClient
-from .instagram import InstagramClient, InstagramError, LoginRequired, NotFound, RateLimited
+from .instagram import InstagramClient, InstagramError, LoginRequired, NotFound, RateLimited, private_message
 from .report import Entity, aggregate, is_brand_candidate, write_csv, write_json
 from .signals import SignalExtractor
 from .store import Checkpoint, ProfileCache
@@ -76,19 +76,9 @@ def run_scan(settings: Settings, opts: ScanOptions, client, progress: Progress |
     if not target:
         raise ScanError("No target account given.")
 
-    try:
-        profile, raw_user = client.get_profile(target)
-    except NotFound:
-        extra = " or isn't a business/creator account" if client.source_name == "graph" else ""
-        raise ScanError(f"@{target} doesn't exist{extra}.")
-    except LoginRequired as exc:
-        if client.source_name == "graph":
-            raise ScanError(f"The Graph API token was rejected ({exc}).")
-        if client.logged_in:
-            raise ScanError(f"The saved Instagram session was rejected ({exc}). Log in again.")
-        raise ScanError(f"Instagram requires login from this network ({exc}). Log in with an Instagram account.")
-    except InstagramError as exc:
-        raise ScanError(f"Couldn't load @{target}: {exc}")
+    profile, raw_user = _load_target(client, target)
+    if profile.is_private and not profile.followed_by_viewer:
+        raise ScanError(private_message(profile.username, client.logged_in))
     emit({"stage": "profile", "profile": asdict(profile)})
     log.info("Target: @%s (%s), %s followers", profile.username, profile.full_name or "no name", f"{profile.followers:,}")
 
@@ -99,6 +89,9 @@ def run_scan(settings: Settings, opts: ScanOptions, client, progress: Progress |
         log.info("Resuming: %d posts already scanned", len(checkpoint.done))
 
     completed, message = _scan_posts(client, profile, raw_user, extractor, checkpoint, opts.limit, emit, should_stop)
+    if client.source_name == "web" and not client.logged_in:
+        message += (" Not logged in, so Instagram only showed the latest posts, without photo tags, collabs or"
+                    " paid-partnership labels. Connect Instagram for a full scan.")
 
     entities = aggregate(checkpoint.signals, str(settings.known_brands_file))
     cache = ProfileCache(settings.cache_dir / f"profiles_{client.source_name}.json")
@@ -121,6 +114,34 @@ def run_scan(settings: Settings, opts: ScanOptions, client, progress: Progress |
     })
     emit({"stage": "done", "brands": len(brands), "entities": len(entities)})
     return ScanResult(asdict(profile), brands, entities, posts_scanned, completed, message, files)
+
+
+def _load_target(client, target: str):
+    try:
+        return client.get_profile(target)
+    except NotFound:
+        extra = " or isn't a business/creator account" if client.source_name == "graph" else ""
+        raise ScanError(f"@{target} doesn't exist{extra}.")
+    except (LoginRequired, RateLimited) as exc:
+        if client.source_name == "graph":
+            if isinstance(exc, RateLimited):
+                raise ScanError(f"Graph API rate limit ({exc}). Try again later.")
+            raise ScanError(f"The Graph API token was rejected ({exc}).")
+        if client.logged_in:
+            raise ScanError(f"The saved Instagram session was rejected ({exc}). Log in again.")
+        reason = exc
+    except InstagramError as exc:
+        raise ScanError(f"Couldn't load @{target}: {exc}")
+
+    # Logged out and the JSON API refused: the public profile page still shows the latest posts.
+    log.info("Instagram refused the logged-out API (%s); reading the profile page instead", reason)
+    try:
+        return client.get_profile_page(target)
+    except NotFound:
+        raise ScanError(f"Couldn't find @{target}. Check the username; if the account exists, "
+                        "connect Instagram to scan it.")
+    except InstagramError as exc:
+        raise ScanError(f"Instagram requires login from this network ({exc}). Connect an Instagram account.")
 
 
 def _scan_posts(client, profile, raw_user, extractor, checkpoint, limit, emit, should_stop) -> tuple[bool, str]:

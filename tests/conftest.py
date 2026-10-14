@@ -47,7 +47,8 @@ class FakeClient(InstagramClient):
                 "username": p.username, "id": p.user_id, "full_name": p.full_name,
                 "is_business_account": p.is_business, "is_professional_account": p.is_professional,
                 "category_name": p.category, "business_category_name": p.business_category,
-                "edge_followed_by": {"count": p.followers}, "is_verified": p.is_verified}}}
+                "edge_followed_by": {"count": p.followers}, "is_verified": p.is_verified,
+                "is_private": p.is_private}}}
         return {"items": self.feed, "more_available": False}
 
     def get_bytes(self, url):

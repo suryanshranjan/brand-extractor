@@ -94,6 +94,17 @@ class JobStore:
         with self.lock, self._conn() as c:
             c.execute(f"UPDATE jobs SET {cols} WHERE id=?", (*fields.values(), job_id))
 
+    def requeue(self, job_id: str, options: dict) -> None:
+        """Put a finished scan back in the queue (as the newest), clearing its old outcome."""
+        now = time.time()
+        with self.lock, self._conn() as c:
+            c.execute("UPDATE jobs SET status='queued', options=?, progress='{}', message='', files='{}', summary='{}', "
+                      "created_at=?, updated_at=? WHERE id=?", (json.dumps(options), now, now, job_id))
+
+    def delete(self, job_id: str) -> None:
+        with self.lock, self._conn() as c:
+            c.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+
     def claim_next(self) -> dict | None:
         with self.lock, self._conn() as c:
             row = c.execute("SELECT * FROM jobs WHERE status='queued' ORDER BY created_at LIMIT 1").fetchone()
@@ -136,6 +147,7 @@ class Worker(threading.Thread):
     def _run_job(self, job: dict) -> None:
         job_id = job["id"]
         if job_id in self.cancelled:
+            self.cancelled.discard(job_id)
             self.store.update(job_id, status="cancelled", message="Cancelled.")
             return
         log.info("Job %s: scanning @%s", job_id, job["target"])

@@ -4,11 +4,15 @@ Instagram returns posts in two shapes:
   * the legacy GraphQL "edge" shape (web_profile_info, first ~12 posts, works
     without login when Instagram allows it), and
   * the v1 feed "item" shape (/api/v1/feed/user/, paginated, needs login).
+  * the Relay "Polaris" shape embedded in the profile web page, the logged-out
+    fallback when Instagram refuses the JSON API (latest ~12 posts, no tags).
 Both are normalised into models.Post so nothing downstream cares which one was used.
 """
 from __future__ import annotations
 
+import json
 import logging
+import re
 import random
 import time
 from collections import deque
@@ -142,17 +146,39 @@ class InstagramClient:
             raise NotFound(username)
         return parse_profile(user), user
 
+    def get_profile_page(self, username: str) -> tuple[Profile, dict]:
+        """Logged-out fallback: read the profile and its latest posts from the profile web page."""
+        self._throttle()
+        try:
+            resp = self.session.get(f"{config.IG_BASE}/{username}/", allow_redirects=False)
+        except RequestException as exc:
+            raise InstagramError(f"Network error: {exc}") from exc
+        if resp.status_code in (301, 302, 303, 307, 308):
+            raise LoginRequired("Instagram redirected the profile page to login")
+        if resp.status_code == 404:
+            raise NotFound(username)
+        if resp.status_code != 200:
+            raise InstagramError(f"HTTP {resp.status_code} loading the profile page")
+        user = parse_profile_page(resp.text)
+        if not user:
+            raise NotFound(username)
+        return parse_profile(user), user
+
     def iter_posts(self, profile: Profile, raw_user: dict) -> Iterator[Post]:
         """Yield the profile's posts, newest first, fetching pages lazily."""
         if profile.is_private and not profile.followed_by_viewer:
-            raise InstagramError(f"@{profile.username} is private and the logged-in account doesn't follow it")
+            raise InstagramError(private_message(profile.username, self.logged_in))
 
         if not self.logged_in:
             edges = (raw_user.get("edge_owner_to_timeline_media") or {}).get("edges") or []
+            page_edges = (raw_user.get("polaris_ordered_timeline_connection") or {}).get("edges") or []
             log.warning("Not logged in: Instagram only exposes the latest %d posts. "
-                        "Use --login to scan further back.", len(edges))
+                        "Use --login to scan further back.", len(edges) or len(page_edges))
             for edge in edges:
                 yield parse_graphql_node(edge["node"])
+            if not edges:
+                for edge in page_edges:
+                    yield parse_polaris_node(edge["node"])
             return
 
         max_id = None
@@ -169,6 +195,12 @@ class InstagramClient:
                 return
 
 
+def private_message(username: str, logged_in: bool) -> str:
+    if logged_in:
+        return f"@{username} is a private account, and the connected Instagram account doesn't follow it."
+    return f"@{username} is a private account. Connect an Instagram account that follows it to scan it."
+
+
 # --- Parsers ---------------------------------------------------------------
 
 def _usernames(values) -> list[str]:
@@ -180,6 +212,7 @@ def _usernames(values) -> list[str]:
 
 
 def parse_profile(user: dict) -> Profile:
+    links = user.get("bio_links") or []
     return Profile(
         username=user.get("username") or "",
         user_id=str(user.get("id") or user.get("pk") or ""),
@@ -191,7 +224,7 @@ def parse_profile(user: dict) -> Profile:
         category=user.get("category_name") or user.get("category") or "",
         business_category=user.get("business_category_name") or "",
         followers=int((user.get("edge_followed_by") or {}).get("count") or user.get("follower_count") or 0),
-        external_url=user.get("external_url") or "",
+        external_url=user.get("external_url") or (links[0].get("url") or "" if links else ""),
         followed_by_viewer=bool(user.get("followed_by_viewer")),
     )
 
@@ -249,4 +282,51 @@ def parse_graphql_node(node: dict) -> Post:
         coauthors=_usernames(u.get("username") for u in node.get("coauthor_producers") or []),
         sponsors=sponsors,
         is_paid_partnership=bool(node.get("is_paid_partnership")) or bool(sponsors),
+    )
+
+
+_PAGE_JSON = re.compile(r'<script type="application/json"[^>]*>(.*?)</script>', re.S)
+
+
+def parse_profile_page(html: str) -> dict | None:
+    """Pull the profile and its timeline out of the Relay data embedded in a profile page.
+
+    The page carries the account in two `xig_user_by_username` objects (details, and
+    the post timeline); they're merged into one user dict for parse_profile.
+    """
+    found: list[dict] = []
+
+    def walk(obj) -> None:
+        if isinstance(obj, dict):
+            user = obj.get("xig_user_by_username")
+            if isinstance(user, dict):
+                found.append(user)
+            for value in obj.values():
+                walk(value)
+        elif isinstance(obj, list):
+            for value in obj:
+                walk(value)
+
+    for blob in _PAGE_JSON.findall(html):
+        if "xig_user_by_username" in blob:
+            try:
+                walk(json.loads(blob))
+            except ValueError:
+                continue
+    user: dict = {}
+    for part in found:
+        user.update({k: v for k, v in part.items() if v is not None})
+    if not user.get("username"):
+        return None
+    user["id"] = user.get("pk") or user.get("id")  # "id" on this page is a different (FB) id
+    return user
+
+
+def parse_polaris_node(node: dict) -> Post:
+    """Parse a post from the profile page timeline (only the cover image, no tags)."""
+    return Post(
+        code=node.get("code") or str(node.get("pk")),
+        caption=(node.get("caption") or {}).get("text") or "",
+        timestamp=node.get("taken_at"),
+        media=[Media(image_url=node.get("display_uri"), alt_text=node.get("accessibility_caption") or "")],
     )

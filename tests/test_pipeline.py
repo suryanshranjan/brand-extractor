@@ -6,7 +6,11 @@ import pytest
 from brandscan import pipeline
 from brandscan.pipeline import ScanError, ScanOptions, run_scan
 
+from brandscan.instagram import LoginRequired, parse_profile
+from brandscan.models import Profile
+
 from .conftest import FakeClient, PosterReader
+from .test_parsing import PROFILE_PAGE
 
 
 @pytest.fixture
@@ -46,6 +50,25 @@ def test_resume_skips_scanned_posts(settings):
 def test_unknown_target(settings):
     with pytest.raises(ScanError, match="doesn't exist"):
         run_scan(settings, ScanOptions("nobody_here", ocr=False), FakeClient())
+
+
+def test_private_account(settings):
+    client = FakeClient(profiles={"secret": Profile("secret", "9", is_private=True)})
+    with pytest.raises(ScanError, match="private account"):
+        run_scan(settings, ScanOptions("secret", ocr=False), client)
+
+
+def test_logged_out_falls_back_to_profile_page(settings, monkeypatch):
+    from brandscan.instagram import InstagramClient, parse_profile_page
+    client = InstagramClient(None, delay=(0, 0))
+    def refuse(*a, **k):
+        raise LoginRequired("Please wait a few minutes before you try again.")
+    monkeypatch.setattr(client, "get_json", refuse)
+    monkeypatch.setattr(client, "get_profile_page", lambda u: (parse_profile(parse_profile_page(PROFILE_PAGE)),
+                                                               parse_profile_page(PROFILE_PAGE)))
+    result = run_scan(settings, ScanOptions("engifest_dtu", ner=False, ocr=False), client)
+    assert result.posts_scanned == 1 and "Connect Instagram" in result.message
+    assert "redbullindia" in [e.handle for e in result.brands]
 
 
 def test_stop_request(settings):
@@ -92,6 +115,24 @@ def test_api(settings, monkeypatch, poster_ocr):
 
         queued = http.post("/api/scans", json={"target": "redbullindia"}, headers=h).json()
         assert http.post(f"/api/scans/{queued['id']}/cancel", headers=h).json()["status"] == "cancelled"
+
+        # A cancelled scan can be retried, and then actually runs (not cancelled again).
+        assert http.delete(f"/api/scans/{queued['id']}", headers=other).status_code == 404
+        retried = http.post(f"/api/scans/{queued['id']}/retry", headers=h).json()
+        assert retried["status"] == "queued" and retried["message"] == ""
+        assert http.post(f"/api/scans/{queued['id']}/retry", headers=h).status_code == 409
+        assert http.delete(f"/api/scans/{queued['id']}", headers=h).status_code == 409
+        worker._run_job(store.claim_next())
+        assert store.get(queued["id"])["status"] == "done"
+
+        # A finished scan can be re-run, keeping its options, and deleted.
+        again = http.post(f"/api/scans/{job['id']}/retry", json={"fresh": True}, headers=h).json()
+        assert again["options"] == {"limit": 10, "ocr": True, "fresh": True} and again["files"] == []
+        assert again["created_at"] > job["created_at"]
+        worker._run_job(store.claim_next())
+        assert http.delete(f"/api/scans/{job['id']}", headers=h).status_code == 204
+        assert http.get(f"/api/scans/{job['id']}", headers=h).status_code == 404
+        assert [j["id"] for j in http.get("/api/scans", headers=h).json()] == [queued["id"]]
 
 
 def test_serve_refuses_public_without_keys(settings):

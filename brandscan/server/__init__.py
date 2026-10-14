@@ -6,6 +6,8 @@
     GET  /api/scans                        your recent scans
     GET  /api/scans/{id}                   status, progress, and (when finished) the brands
     POST /api/scans/{id}/cancel
+    POST /api/scans/{id}/retry             {"fresh": false}: run a finished scan again (resumes unless fresh)
+    DELETE /api/scans/{id}                 remove a finished scan from the list
     GET  /api/scans/{id}/files/{name}      brands.csv | all_entities.csv | report.json
     GET  /api/instagram                    which Instagram account scans use
     POST /api/instagram/session            {"username": "...", "sessionid": "..."}   (local mode only)
@@ -228,6 +230,27 @@ def create_app(settings: Settings, start_worker: bool = True):
             store.update(job_id, status="cancelled", message="Cancelled.")
         worker.cancel(job_id)
         return public(store.get(job_id))
+
+    class RetryRequest(BaseModel):
+        fresh: bool = False
+
+    @app.post("/api/scans/{job_id}/retry", status_code=202)
+    def retry_scan(job_id: str, body: RetryRequest | None = None, owner: str = Depends(owner_of)):
+        job = own_job(job_id, owner)
+        if job["status"] in ACTIVE:
+            raise HTTPException(409, f"Scan is already {job['status']}")
+        options = dict(job["options"], fresh=bool(body and body.fresh))
+        worker.cancelled.discard(job_id)
+        store.requeue(job_id, options)
+        worker.wake.set()
+        return public(store.get(job_id))
+
+    @app.delete("/api/scans/{job_id}", status_code=204)
+    def delete_scan(job_id: str, owner: str = Depends(owner_of)):
+        job = own_job(job_id, owner)
+        if job["status"] in ACTIVE:
+            raise HTTPException(409, "Cancel the scan before deleting it.")
+        store.delete(job_id)
 
     @app.get("/api/scans/{job_id}/files/{name}")
     def download(job_id: str, name: str, owner: str = Depends(owner_of)):
