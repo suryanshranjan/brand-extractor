@@ -1,0 +1,11 @@
+.env
+.venv
+data
+sessions
+cache
+output
+legacy
+*.log
+*.db
+**/__pycache__
+tests

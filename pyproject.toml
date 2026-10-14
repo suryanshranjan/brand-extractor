@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brandscan"
+dynamic = ["version"]
+description = "Find the brands that sponsor or partner with an Instagram account."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "curl_cffi>=0.7",
+    "spacy>=3.7,<4",
+]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.110", "uvicorn>=0.29"]
+login = ["playwright>=1.40"]
+ocr-local = ["easyocr>=1.7"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+brandscan = "brandscan.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "brandscan.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["brandscan*"]
+
+[tool.setuptools.package-data]
+brandscan = ["data/*.txt", "server/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

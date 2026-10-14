@@ -1,0 +1,25 @@
+# Secrets
+.env
+cookies*.json
+
+# Runtime data (root-level only; brandscan/data/ is source and must stay tracked)
+/data/
+/sessions/
+/cache/
+/output/
+*.log
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+
+# Old scraper output (real accounts' data); kept locally only
+/legacy/

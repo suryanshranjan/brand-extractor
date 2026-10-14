@@ -1,0 +1,214 @@
+# Brands accepted from "Our sponsors" posters even when seen only once.
+# One per line. Extend per deployment in <data dir>/known_brands.txt.
+
+# Phones & electronics
+Samsung
+Apple
+OnePlus
+Vivo
+Oppo
+Realme
+Xiaomi
+Redmi
+Motorola
+Nothing
+iQOO
+Poco
+Lava
+Sony
+JBL
+boAt
+Noise
+Fire-Boltt
+Boult
+Zebronics
+Lenovo
+HP
+Dell
+Asus
+Acer
+LG
+Intel
+AMD
+Nvidia
+Qualcomm
+
+# Tech & developer platforms
+Google
+Microsoft
+Amazon
+AWS
+Meta
+GitHub
+GitLab
+Replit
+Vercel
+Netlify
+Notion
+Figma
+Canva
+Postman
+MongoDB
+Devfolio
+Unstop
+HackerRank
+HackerEarth
+LeetCode
+GeeksforGeeks
+Coding Ninjas
+Scaler
+Polygon
+Solana
+Ethereum
+Filecoin
+Celo
+Aptos
+Ethindia
+Wolfram
+Taskade
+Interview Cake
+Balsamiq
+Echo3D
+.xyz
+Axure
+Jetbrains
+Digital Ocean
+Twilio
+Auth0
+
+# Food & beverages
+Red Bull
+Coca-Cola
+Pepsi
+Sprite
+Thums Up
+Monster
+Sting
+Bisleri
+Kinley
+Paper Boat
+Raw Pressery
+Amul
+Mother Dairy
+Nestle
+Nescafe
+Bru
+Cadbury
+Lays
+Kurkure
+Bingo
+Haldiram's
+Domino's
+Pizza Hut
+McDonald's
+KFC
+Burger King
+Subway
+Starbucks
+Chaayos
+Chai Point
+Wow! Momo
+Zomato
+Swiggy
+Blinkit
+Zepto
+Dunzo
+BigBasket
+Licious
+
+# Fashion, beauty, lifestyle
+Nike
+Adidas
+Puma
+Reebok
+Skechers
+Bata
+Levi's
+Jack & Jones
+Bewakoof
+The Souled Store
+Myntra
+Ajio
+Nykaa
+Mamaearth
+Lakme
+Maybelline
+Plum
+Bombay Shaving Company
+Beardo
+The Man Company
+Fogg
+Park Avenue
+Titan
+Fastrack
+Lenskart
+Tanishq
+
+# Finance, payments, edtech
+Paytm
+PhonePe
+Google Pay
+Razorpay
+Cred
+Groww
+Zerodha
+Upstox
+StockGro
+Angel One
+HDFC Bank
+ICICI Bank
+SBI
+Axis Bank
+Kotak
+IDFC First
+Byju's
+Unacademy
+Physics Wallah
+upGrad
+Simplilearn
+Internshala
+Naukri
+LinkedIn
+
+# Media, travel, mobility, telecom
+Spotify
+JioSaavn
+Gaana
+Radio Mirchi
+Red FM
+Big FM
+MTV
+Netflix
+Amazon Prime
+JioCinema
+Hotstar
+Zee5
+SonyLIV
+BookMyShow
+Paytm Insider
+District
+MakeMyTrip
+Goibibo
+Yatra
+OYO
+Zostel
+Uber
+Ola
+Rapido
+Yulu
+Royal Enfield
+Hero
+Honda
+TVS
+Bajaj
+Ather
+Ola Electric
+Jio
+Airtel
+Vodafone Idea
+
+# Brands seen in earlier scans
+Viberse
+Hans Outfit
+Mom's Kitchen
+Gethin Gyms

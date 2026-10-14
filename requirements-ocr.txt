@@ -1,0 +1,3 @@
+# Optional local OCR (no API key needed, but ~2 GB with PyTorch).
+# Not needed if you set OCRSPACE_API_KEY.
+easyocr>=1.7
